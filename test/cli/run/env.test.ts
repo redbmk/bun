@@ -1,5 +1,14 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { bunRun, bunRunAsScript, bunTest, tempDirWithFiles, bunExe, bunEnv, isWindows } from "harness";
+import {
+  bunEnv,
+  bunExe,
+  bunRun,
+  bunRunAsScript,
+  bunTest,
+  isWindows,
+  tempDirWithFiles,
+  writeShebangScript,
+} from "harness";
 import path from "path";
 
 function bunRunWithoutTrim(file: string, env?: Record<string, string>) {
@@ -459,6 +468,58 @@ describe("boundary tests", () => {
     // should be truncated
     expect(stdout).toBe(expected);
     expect(stdout2).toBe(expected);
+  });
+});
+
+describe("bun run passes .env to child processes", () => {
+  test("calling node", () => {
+    const dir = tempDirWithFiles("dotenv", {
+      "package.json": `{"scripts":{"saybar": "node index.js"}}`,
+      ".env": "FOO=bar\n",
+      "index.js": "console.log(process.env.FOO);",
+    });
+    const { stdout } = bunRunAsScript(dir, "saybar", {});
+    expect(stdout).toBe("bar");
+  });
+
+  test("calling sh", () => {
+    const dir = tempDirWithFiles("dotenv", {
+      "package.json": `{"scripts":{"saybar": "sh index.sh"}}`,
+      ".env": "FOO=bar\n",
+      "index.sh": "echo $FOO",
+    });
+    const { stdout } = bunRunAsScript(dir, "saybar", {});
+    expect(stdout).toBe("bar");
+  });
+
+  test("calling bun", () => {
+    const dir = tempDirWithFiles("dotenv", {
+      "package.json": `{"scripts":{"saybar": "bun run index.ts"}}`,
+      ".env": "FOO=bar\n",
+      "index.ts": "console.log(process.env.FOO);",
+    });
+    const { stdout } = bunRunAsScript(dir, "saybar", {});
+    expect(stdout).toBe("bar");
+  });
+
+  test("calling bun shebang", () => {
+    const dir = tempDirWithFiles("dotenv", {
+      "package.json": `{"scripts":{"saybar": "./index.js"}}`,
+      ".env": "FOO=bar\n",
+    });
+    writeShebangScript(`${dir}/index.js`, "bun", "console.log(process.env.FOO)");
+    const { stdout } = bunRunAsScript(dir, "saybar", {});
+    expect(stdout).toBe("bar");
+  });
+
+  test("calling node shebang", () => {
+    const dir = tempDirWithFiles("dotenv", {
+      "package.json": `{"scripts":{"saybar": "./index.js"}}`,
+      ".env": "FOO=bar\n",
+    });
+    writeShebangScript(`${dir}/index.js`, "node", "console.log(process.env.FOO)");
+    const { stdout } = bunRunAsScript(dir, "saybar", {});
+    expect(stdout).toBe("bar");
   });
 });
 
